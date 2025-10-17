@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mini Royale — Clash Royale style (simplified)</title>
+<style>
+  :root{
+    --bg: linear-gradient(180deg,#0b1220,#071022);
+    --card-bg: rgba(255,255,255,0.02);
+    --pane: rgba(255,255,255,0.03);
+    --accentA: #2b6ef6; /* blue */
+    --accentB: #e04545; /* red */
+    --muted: #a9b7c7;
+    --glass: rgba(255,255,255,0.04);
+  }
+  html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Roboto,Arial;background:var(--bg);color:#eaf2ff;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1100px;margin:12px auto;padding:14px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  h1{font-size:18px;margin:0}
+  p.lead{margin:0;color:var(--muted);font-size:13px}
+  /* menu */
+  .menu{position:relative}
+  .menu-btn{background:var(--glass);border:0;padding:8px;border-radius:8px;cursor:pointer;font-size:18px}
+  .menu-panel{position:absolute;right:0;top:46px;background:rgba(6,10,16,0.96);backdrop-filter:blur(8px);padding:8px;border-radius:10px;min-width:200px;box-shadow:0 6px 30px rgba(0,0,0,0.6);display:none;z-index:30}
+  .menu-panel.show{display:block}
+  .menu-panel button, .menu-panel label{display:block;width:100%;background:none;border:0;color:#e6f0ff;padding:10px;text-align:left;cursor:pointer}
+  .menu-panel hr{border:0;border-top:1px solid rgba(255,255,255,0.04);margin:6px 0}
+  /* stage */
+  .stage-wrap{margin-top:12px;background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));border-radius:12px;padding:10px;box-shadow:0 6px 30px rgba(2,6,23,0.6)}
+  .game-row{display:flex;gap:12px;align-items:flex-start}
+  .canvas-pane{flex:1;background:linear-gradient(180deg,#06304a,#08263a);border-radius:10px;padding:10px;position:relative}
+  canvas{width:100%;height:auto;display:block;border-radius:6px;background:transparent}
+  .sidebar{width:320px;min-width:260px;color:var(--muted)}
+  .panel{background:var(--pane);padding:12px;border-radius:10px}
+  .score{font-size:28px;color:var(--accentA);font-weight:700}
+  .score.red{color:var(--accentB)}
+  .meta{font-size:13px;color:var(--muted);margin-top:6px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .btn{background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;border:0;color:#eaf2ff;cursor:pointer}
+  .cards-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;justify-content:center}
+  .card-btn{width:60px;height:72px;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:6px;border:2px solid rgba(255,255,255,0.02);cursor:pointer}
+  .card-cost{font-weight:700;font-size:14px}
+  .card-label{font-size:12px;color:var(--muted);text-align:center}
+  .elixir-bar{height:8px;background:rgba(255,255,255,0.03);border-radius:6px;overflow:hidden;margin-top:8px}
+  .elixir-fill{height:100%;width:0%;background:linear-gradient(90deg,#8be06a,#2dd4bf)}
+  footer{margin-top:10px;color:var(--muted);font-size:13px;text-align:center}
+  /* mobile */
+  @media (max-width:980px){
+    .game-row{flex-direction:column}
+    .sidebar{width:100%}
+  }
+  /* top/bottom control bars for 2-player */
+  .top-controls{position:absolute;left:50%;transform:translateX(-50%);top:6px;display:flex;gap:8px;z-index:10}
+  .bottom-controls{position:absolute;left:50%;transform:translateX(-50%);bottom:6px;display:flex;gap:8px;z-index:10}
+  .small-ghost{background:rgba(0,0,0,0.25);padding:6px 10px;border-radius:999px;font-size:13px;color:#eaf2ff;border:1px solid rgba(255,255,255,0.02)}
+  /* banner for win */
+  .banner{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(2,6,23,0.9);padding:16px 22px;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.6);display:none;z-index:50}
+  .banner.show{display:block}
+  .banner h2{margin:0 0 8px 0}
+  .hint{font-size:12px;color:var(--muted)}
+  /* small helpers */
+  .muted{color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Mini Royale — simplified Clash Royale (playable)</h1>
+        <p class="lead">6 maxed cards • slight 3D look • mobile-ready • 1v1 vs Bot or 2-player local</p>
+      </div>
+      <div class="menu">
+        <button id="menuBtn" class="menu-btn" aria-label="menu">⋮</button>
+        <div id="menuPanel" class="menu-panel" role="dialog" aria-hidden="true">
+          <label>Mode</label>
+          <button data-mode="bot" class="modeBtn">1v1 — vs Bot</button>
+          <button data-mode="local" class="modeBtn">2-player local</button>
+          <hr>
+          <button id="restart">Restart</button>
+          <button id="help">Help / Controls</button>
+          <button id="reset">Reset storage (scores)</button>
+          <hr>
+          <div class="muted">Tip: on mobile, tap cards to place. Top controls are for Player 2 in local mode.</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="stage-wrap">
+      <div class="game-row">
+        <div class="canvas-pane panel" id="canvasPane">
+          <div class="top-controls" id="topControls" style="display:none"></div>
+          <canvas id="gameCanvas" width="960" height="540"></canvas>
+          <div class="bottom-controls" id="bottomControls"></div>
+          <div class="banner" id="banner"><h2 id="bannerText">Victory</h2><div class="hint" id="bannerHint">Restart to play again</div></div>
+        </div>
+
+        <aside class="sidebar">
+          <div class="panel">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <div style="font-size:13px">Player 1 (Bottom)</div>
+                <div class="score" id="p1Score">Tower: 1500</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:13px">Player 2 (Top)</div>
+                <div class="score red" id="p2Score">Tower: 1500</div>
+              </div>
+            </div>
+
+            <div class="meta">Elixir (regen): <span id="elixirVal">10</span> / 10</div>
+            <div class="elixir-bar" aria-hidden="true"><div id="elixirFill" class="elixir-fill"></div></div>
+
+            <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+              <div class="muted">Cards (maxed stats)</div>
+              <div class="muted" id="modeLabel">Mode: vs Bot</div>
+            </div>
+
+            <div class="cards-row" id="cardRow">
+              <!-- cards inserted by JS -->
+            </div>
+
+            <div style="margin-top:10px;display:flex;gap:8px">
+              <button id="spectateBtn" class="btn">Toggle Top Controls</button>
+              <button id="saveBtn" class="btn">Save Best Score</button>
+            </div>
+
+            <div style="margin-top:10px" class="muted">Win by destroying opposing tower. Units auto-target nearest enemy (units or towers).</div>
+          </div>
+
+          <div style="height:12px;"></div>
+
+          <div class="panel">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div><strong>Leaderboard (top wins)</strong></div>
+              <div class="muted">Local</div>
+            </div>
+            <ol id="leaderboard" style="padding-left:18px;margin-top:8px;color:#dff0e0"></ol>
+          </div>
+        </aside>
+      </div>
+      <footer>Controls: Tap/click a card then tap the lane (or click card then click canvas). Desktop: click. Mobile: tap.</footer>
+    </div>
+  </div>
+
+<script>
+/* ---------- Game config & data ---------- */
+/*
+Simplified rules:
+- Two lanes horizontally. Units spawn on the player's half and move toward enemy towers.
+- 6 cards with cost, hp, dmg, speed, range. Maxed stats (strong).
+- Elixir regen to 10, start at 10.
+- Towers have HP; destroy enemy tower to win.
+- Bot: simple AI spawns random legal cards when it has elixir.
+- 2-player local: both players tap their on-screen cards and place units on their half.
+*/
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const DPR = window.devicePixelRatio || 1;
+canvas.width = 960 * DPR;
+canvas.height = 540 * DPR;
+canvas.style.width = '100%';
+canvas.style.height = 'auto';
+ctx.scale(DPR, DPR);
+
+const W = 960, H = 540;
+const LANE_Y = [H*0.33, H*0.66]; // two lanes (y positions)
+const LEFT_TOWER_X = 80, RIGHT_TOWER_X = W - 80;
+const TOWER_Y = H/2;
+const TOWER_SIZE = 72;
+
+let mode = 'bot'; // 'bot' or 'local'
+let elixir = 10;
+const MAX_ELIXIR = 10;
+const ELIXIR_REGEN_RATE = 1/1.5; // per second (1 every 1.5s approx)
+let lastElixirTick = performance.now();
+
+let units = []; // all troops
+let towers = {
+  p1: {x: LEFT_TOWER_X, y: TOWER_Y, hp:1500, team:1},
+  p2: {x: RIGHT_TOWER_X, y: TOWER_Y, hp:1500, team:2}
+};
+let scoreWins = {p1:0, p2:0};
+
+let lastUpdate = performance.now();
+let running = true;
+let selectedCardForPlacement = null;
+let placementOwner = null; // 1 or 2 while placing
+let botTimer = 0;
+let turnCount = 0;
+
+// card definitions (maxed)
+const CARD_DEFS = [
+  {id:'knight', label:'Knight', cost:3, hp:800, dmg:120, atkSpeed:1.0, speed:60, range:18, type:'melee'},
+  {id:'archer', label:'Archer', cost:3, hp:450, dmg:120, atkSpeed:1.2, speed:70, range:120, type:'ranged'},
+  {id:'giant', label:'Giant', cost:5, hp:2200, dmg:160, atkSpeed:1.1, speed:40, range:28, type:'melee', target:'building'},
+  {id:'wizard', label:'Wizard', cost:4, hp:700, dmg:220, atkSpeed:1.4, speed:55, range:120, type:'area'},
+  {id:'dragon', label:'BabyDragon', cost:4, hp:1200, dmg:160, atkSpeed:1.0, speed:55, range:100, type:'flying'},
+  {id:'goblin', label:'Goblins', cost:2, hp:250, dmg:95, atkSpeed:1.6, speed:120, range:14, type:'melee', count:3}
+];
+
+// helper to clone card as troop(s)
+function spawnCard(cardId, team, laneY, spawnX){
+  const def = CARD_DEFS.find(c=>c.id===cardId);
+  if(!def) return;
+  // Some cards spawn multiple (goblins count)
+  if(def.count && def.count > 1){
+    for(let i=0;i<def.count;i++){
+      const u = createUnit(def, team, laneY, spawnX, i);
+      units.push(u);
+    }
+  } else {
+    const u = createUnit(def, team, laneY, spawnX, 0);
+    units.push(u);
+  }
+}
+
+function createUnit(def, team, laneY, spawnX, idx){
+  const facing = team===1 ? 1 : -1;
+  const x = spawnX;
+  const y = laneY + (Math.random()*12-6);
+  return {
+    id: Math.random().toString(36).slice(2,9),
+    kind: def.id,
+    label: def.label,
+    team,
+    hp: def.hp,
+    maxHp: def.hp,
+    dmg: def.dmg,
+    atkSpeed: def.atkSpeed,
+    speed: def.speed, // px/s
+    range: def.range,
+    type: def.type,
+    x,y,
+    vx: facing * def.speed,
+    target: null,
+    lastAtk: 0,
+    size: 18 + (def.hp/1000)*10
+  }
+}
+
+/* ---------- Input: cards UI & placement ---------- */
+const cardRow = document.getElementById('cardRow');
+const topControls = document.getElementById('topControls');
+const bottomControls = document.getElementById('bottomControls');
+const elixirFill = document.getElementById('elixirFill');
+const elixirVal = document.getElementById('elixirVal');
+const modeLabel = document.getElementById('modeLabel');
+const leaderboardEl = document.getElementById('leaderboard');
+
+function buildCardButtons(){
+  cardRow.innerHTML = '';
+  topControls.innerHTML = '';
+  bottomControls.innerHTML = '';
+  CARD_DEFS.forEach(def=>{
+    // bottom (player1)
+    const b = document.createElement('button');
+    b.className = 'card-btn';
+    b.dataset.card = def.id;
+    b.innerHTML = '<div style="font-size:12px;font-weight:700">'+def.label+'</div><div class="card-cost">'+def.cost+'</div><div class="card-label">HP:'+def.hp+'</div>';
+    b.addEventListener('click', ()=>beginPlacement(def.id,1));
+    cardRow.appendChild(b);
+
+    // duplicate for top and bottom overlays (quick touch)
+    const tbtn = b.cloneNode(true);
+    tbtn.addEventListener('click', ()=>beginPlacement(def.id,2));
+    topControls.appendChild(tbtn);
+    const bbtn = b.cloneNode(true);
+    bbtn.addEventListener('click', ()=>beginPlacement(def.id,1));
+    bottomControls.appendChild(bbtn);
+  });
+}
+buildCardButtons();
+
+/* placement: click card then click canvas to place on player's half */
+const canvasPane = document.getElementById('canvasPane');
+canvasPane.addEventListener('click', (ev)=>{
+  // compute canvas coords
+  const rect = canvas.getBoundingClientRect();
+  const cx = (ev.clientX - rect.left) * (W / rect.width);
+  const cy = (ev.clientY - rect.top) * (H / rect.height);
+  if(selectedCardForPlacement){
+    tryPlaceCard(selectedCardForPlacement, placementOwner, cx, cy);
+  }
+});
+
+function beginPlacement(cardId, owner){
+  const def = CARD_DEFS.find(c=>c.id===cardId);
+  if(!def) return;
+  placementOwner = owner;
+  // require enough elixir
+  if(elixir < def.cost){
+    flashElixir(); return;
+  }
+  selectedCardForPlacement = cardId;
+  // show subtle hint - user must tap lane area (we rely on click)
+  // For mobile, allow immediate spawn at a default spawn X if they tap quickly elsewhere
+}
+
+function tryPlaceCard(cardId, owner, cx, cy){
+  const def = CARD_DEFS.find(c=>c.id===cardId);
+  if(!def) return;
+  // placement rules: owner 1 must place on left half (x < W/2), owner 2 on right half
+  if(owner === 1 && cx > W/2) { selectedCardForPlacement = null; return; }
+  if(owner === 2 && cx < W/2) { selectedCardForPlacement = null; return; }
+  // choose lane nearest
+  const laneY = (Math.abs(cy - LANE_Y[0]) < Math.abs(cy - LANE_Y[1])) ? LANE_Y[0] : LANE_Y[1];
+  const spawnX = owner === 1 ? LEFT_TOWER_X + 60 : RIGHT_TOWER_X - 60;
+  // spend elixir
+  elixir = Math.max(0, elixir - def.cost);
+  selectedCardForPlacement = null;
+  placementOwner = null;
+  spawnCard(cardId, owner, laneY, spawnX + (Math.random()*20-10));
+}
+
+/* quick placement by clicking the card on the sidebar - places at default lane and spawnX */
+function quickPlace(cardId, owner){
+  const def = CARD_DEFS.find(c=>c.id===cardId);
+  if(!def) return;
+  if(elixir < def.cost) { flashElixir(); return; }
+  const laneY = LANE_Y[Math.random() < 0.5 ? 0 : 1];
+  const spawnX = owner === 1 ? LEFT_TOWER_X + 60 : RIGHT_TOWER_X - 60;
+  elixir -= def.cost;
+  spawnCard(cardId, owner, laneY, spawnX + (Math.random()*20-10));
+}
+
+/* ---------- Elixir & UI ---------- */
+function flashElixir(){
+  elixirFill.style.transition = 'none';
+  elixirFill.style.width = '100%';
+  setTimeout(()=>{ elixirFill.style.transition = ''; updateElixirUI(); }, 150);
+}
+
+function updateElixirUI(){
+  elixirVal.textContent = Math.floor(elixir);
+  const pct = Math.min(1, elixir / MAX_ELIXIR) * 100;
+  elixirFill.style.width = pct + '%';
+}
+
+/* ---------- Simple physics & combat ---------- */
+
+function dist(a,b){
+  const dx = a.x - b.x, dy = a.y - b.y;
+  return Math.sqrt(dx*dx+dy*dy);
+}
+
+function findNearestEnemy(unit){
+  // priority: enemy units in range, then enemy tower(s)
+  let best = null, bestD = 1e9;
+  for(const u of units){
+    if(u.team === unit.team) continue;
+    const d = dist(unit, u);
+    if(d < bestD){
+      bestD = d; best = u;
+    }
+  }
+  // consider towers in range
+  const enemyTower = (unit.team === 1) ? towers.p2 : towers.p1;
+  const dTower = Math.abs(unit.x - enemyTower.x) + Math.abs(unit.y - enemyTower.y);
+  if(dTower < bestD && dTower <= unit.range + 60){ // building range fudge
+    return enemyTower;
+  }
+  return best;
+}
+
+/* ---------- Drawing & visuals (slight 3D) ---------- */
+
+function drawScene(){
+  // background arena
+  ctx.clearRect(0,0,W,H);
+  // base grass
+  const grd = ctx.createLinearGradient(0,0,0,H);
+  grd.addColorStop(0,'#0b3b2f'); grd.addColorStop(1,'#06323a');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0,0,W,H);
+
+  // subtle perspective floor shading
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.02)';
+  ctx.fillRect(0, H*0.28, W, H*0.44);
+  ctx.restore();
+
+  // draw river/bridge area center
+  ctx.fillStyle = 'rgba(0,60,120,0.12)';
+  ctx.fillRect(W*0.35, H*0.42, W*0.3, H*0.16);
+
+  // draw lanes markers
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  for(let y of LANE_Y){
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+
+  // draw towers
+  drawTower(towers.p1, false);
+  drawTower(towers.p2, true);
+
+  // draw units (sorted by y for depth)
+  units.sort((a,b)=>a.y - b.y);
+  for(const u of units) drawUnit(u);
+
+  // overlay: selected placement highlight
+  if(selectedCardForPlacement){
+    // draw a faint circle near spawn positions depending on owner
+    ctx.save();
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = placementOwner === 1 ? '#2b6ef6' : '#e04545';
+    const sx = placementOwner===1 ? LEFT_TOWER_X + 80 : RIGHT_TOWER_X - 80;
+    ctx.beginPath();
+    ctx.arc(sx, H/2, 60, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawTower(t, flip){
+  ctx.save();
+  // slight 3D: shadow and top
+  ctx.translate(t.x, t.y);
+  if(flip) ctx.scale(-1,1);
+  // shadow
+  ctx.beginPath();
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.ellipse(0, 36, 46, 12, 0, 0, Math.PI*2);
+  ctx.fill();
+  // base
+  ctx.fillStyle = (t.team===1)? '#2b6ef6' : '#e04545';
+  roundRect(ctx, -TOWER_SIZE/2, -TOWER_SIZE/2 - 12, TOWER_SIZE, TOWER_SIZE, 12, true);
+  // HP bar
+  const hpPct = Math.max(0, t.hp) / 1500;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  roundRect(ctx, -48, -TOWER_SIZE/2 - 26, 96, 10, 6, true);
+  ctx.fillStyle = '#9ae6b4';
+  roundRect(ctx, -48, -TOWER_SIZE/2 - 26, 96*hpPct, 10, 6, true);
+  ctx.restore();
+}
+
+function drawUnit(u){
+  ctx.save();
+  // shadow
+  ctx.globalAlpha = 0.25;
+  ctx.beginPath();
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.ellipse(u.x, u.y + u.size*0.6, u.size*0.6, u.size*0.28, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // body
+  const color = u.team === 1 ? '#3fb1ff' : '#ff8383';
+  ctx.fillStyle = color;
+  roundRect(ctx, u.x - u.size/2, u.y - u.size/2 - 6, u.size, u.size + 6, u.size/2, true);
+  // label
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.font = '10px Inter, Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(u.label, u.x, u.y - u.size - 8);
+  // HP bar
+  const hpPct = Math.max(0,u.hp)/u.maxHp;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  roundRect(ctx, u.x - 20, u.y - u.size - 4, 40, 6, 6, true);
+  ctx.fillStyle = '#8ef3a6';
+  roundRect(ctx, u.x - 20, u.y - u.size - 4, 40 * hpPct, 6, 6, true);
+
+  ctx.restore();
+}
+
+/* small roundRect helper */
+function roundRect(ctx, x, y, w, h, r, fill=true){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+  if(fill) ctx.fill();
+  else ctx.stroke();
+}
+
+/* ---------- Update loop ---------- */
+function update(dt){
+  if(!running) return;
+
+  // elixir regen
+  lastElixirTick += dt*1000;
+  // regen continuous
+  elixir = Math.min(MAX_ELIXIR, elixir + ELIXIR_REGEN_RATE * (dt));
+  updateElixirUI();
+
+  // units behavior
+  for(const u of units){
+    if(u.hp <= 0) continue;
+    // target selection
+    if(!u.target || u.target.hp <= 0){
+      u.target = findNearestEnemy(u);
+    }
+    if(u.target){
+      // if target is a tower or unit, check range
+      const d = (u.target.x !== undefined) ? dist(u, u.target) : Math.abs(u.x - u.target.x);
+      if(d <= u.range + (u.target.size||24)){
+        // in range: do not advance; attempt to attack by atkSpeed
+        u.vx = 0;
+        u.lastAtk += dt;
+        if(u.lastAtk >= 1 / u.atkSpeed){
+          // deal damage
+          if(u.target.hp !== undefined){
+            u.target.hp -= u.dmg;
+          } else {
+            // target could be tower object with hp
+            u.target.hp -= u.dmg;
+          }
+          u.lastAtk = 0;
+        }
+      } else {
+        // move towards enemy
+        const dir = (u.team === 1) ? 1 : -1;
+        // except if unit targets building specifically stay on lane
+        u.vx = dir * u.speed;
+        u.x += u.vx * dt;
+      }
+    } else {
+      // no target -> advance toward enemy tower
+      const dir = (u.team === 1) ? 1 : -1;
+      u.vx = dir * u.speed;
+      u.x += u.vx * dt;
+    }
+  }
+
+  // collisions: simple - units bump into each other and slow a bit
+  // Remove dead units and check tower deaths
+  units = units.filter(u=>{
+    if(u.hp <= 0) return false;
+    // keep within bounds
+    if(u.x < 0 || u.x > W) return false;
+    return true;
+  });
+
+  // Check towers
+  if(towers.p1.hp <= 0 || towers.p2.hp <= 0){
+    running = false;
+    const winner = towers.p1.hp <= 0 ? 2 : 1;
+    showBanner(winner);
+    // record win
+    if(winner === 1) scoreWins.p1++; else scoreWins.p2++;
+    saveLeaderLocal();
+  }
+
+  // bot AI (if mode bot)
+  if(mode === 'bot'){
+    botTimer += dt;
+    if(botTimer > 0.9){
+      botTimer = 0;
+      botThink(dt);
+    }
+  }
+}
+
+/* ---------- Simple Bot AI ---------- */
+function botThink(dt){
+  // Very simple: if enough elixir, spawn a random card toward player1 towers
+  const choices = CARD_DEFS.filter(c => c.cost <= elixir);
+  if(choices.length === 0) return;
+  // bias: spawn bigger cards occasionally
+  const roll = Math.random();
+  const pick = choices[Math.floor(Math.random()*choices.length)];
+  // sometimes spawn in left or right lane
+  const laneY = LANE_Y[Math.random()<0.5?0:1];
+  // enemy is player1, so bot is player2 and spawns from right side
+  spawnCard(pick.id, 2, laneY, RIGHT_TOWER_X - 60);
+  elixir = Math.max(0, elixir - pick.cost);
+}
+
+/* ---------- Banner / end ---------- */
+const banner = document.getElementById('banner');
+const bannerText = document.getElementById('bannerText');
+const bannerHint = document.getElementById('bannerHint');
+function showBanner(winner){
+  banner.classList.add('show');
+  if(winner === 1){
+    bannerText.textContent = 'Player 1 Wins!';
+    bannerHint.textContent = 'Destroy enemy tower to win — refresh or Restart to play again';
+  } else {
+    bannerText.textContent = (mode==='bot'?'Bot':'Player 2') + ' Wins!';
+    bannerHint.textContent = 'Restart to play again';
+  }
+}
+
+/* ---------- Leaderboard (localStorage) ---------- */
+const LB_KEY = 'mini_royale_leader_v1';
+function saveLeaderLocal(){
+  const raw = JSON.parse(localStorage.getItem(LB_KEY) || '{}');
+  raw.p1 = (raw.p1 || 0) + (scoreWins.p1||0);
+  raw.p2 = (raw.p2 || 0) + (scoreWins.p2||0);
+  localStorage.setItem(LB_KEY, JSON.stringify(raw));
+  updateLeaderboardUI();
+}
+function updateLeaderboardUI(){
+  const raw = JSON.parse(localStorage.getItem(LB_KEY) || '{}');
+  leaderboardEl.innerHTML = '';
+  leaderboardEl.innerHTML += '<li>Player1 wins: ' + (raw.p1 || 0) + '</li>';
+  leaderboardEl.innerHTML += '<li>Player2 wins: ' + (raw.p2 || 0) + '</li>';
+}
+updateLeaderboardUI();
+
+/* ---------- Main loop ---------- */
+function tick(now){
+  const dt = Math.min(0.05, (now - lastUpdate)/1000);
+  lastUpdate = now;
+  update(dt);
+  drawScene();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame((t)=>{ lastUpdate = t; requestAnimationFrame(tick); });
+
+/* ---------- UI: menu & buttons ---------- */
+const menuBtn = document.getElementById('menuBtn');
+const menuPanel = document.getElementById('menuPanel');
+menuBtn.addEventListener('click', ()=> menuPanel.classList.toggle('show'));
+
+document.querySelectorAll('.modeBtn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    mode = b.dataset.mode;
+    modeLabel.textContent = 'Mode: ' + (mode === 'bot' ? 'vs Bot' : '2-player local');
+    menuPanel.classList.remove('show');
+    resetGame();
+  });
+});
+
+document.getElementById('restart').addEventListener('click', ()=>{ resetGame(); menuPanel.classList.remove('show'); });
+document.getElementById('help').addEventListener('click', ()=>{ alert('Controls:\\n- Tap/click a card. Then tap the arena left/right half to place for your player.\\n- Top player uses the top controls in 2-player local.\\n- Bot auto plays when in vs Bot.\\n- Win by destroying the enemy tower.'); });
+document.getElementById('reset').addEventListener('click', ()=>{ if(confirm('Clear stored leaderboard?')){ localStorage.removeItem(LB_KEY); updateLeaderboardUI(); alert('Cleared'); }});
+
+document.getElementById('spectateBtn').addEventListener('click', ()=>{ 
+  const el = topControls.style.display === 'none' ? 'flex' : 'none';
+  topControls.style.display = el;
+});
+document.getElementById('saveBtn').addEventListener('click', ()=>{ saveLeaderLocal(); alert('Saved local wins'); });
+
+/* quick placement via double-click on canvas: place default card for bottom */
+canvas.addEventListener('dblclick', ()=> quickPlace('knight', 1));
+
+/* allow dragging / touch placement: user taps card -> then taps lane (we implemented click to canvas) */
+/* mobile: support touch events for canvas placement */
+canvas.addEventListener('touchstart', function(e){
+  if(e.touches.length === 1 && selectedCardForPlacement){
+    const t = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const cx = (t.clientX - rect.left) * (W / rect.width);
+    const cy = (t.clientY - rect.top) * (H / rect.height);
+    tryPlaceCard(selectedCardForPlacement, placementOwner, cx, cy);
+  }
+}, {passive:true});
+
+/* Restart / reset */
+function resetGame(){
+  units = [];
+  towers.p1.hp = 1500; towers.p2.hp = 1500;
+  elixir = MAX_ELIXIR;
+  updateElixirUI();
+  lastUpdate = performance.now();
+  running = true;
+  banner.classList.remove('show');
+  scoreWins = {p1:0,p2:0};
+}
+
+/* init */
+updateElixirUI();
+modeLabel.textContent = 'Mode: vs Bot';
+topControls.style.display = 'none';
+buildCardButtons();
+
+/* tiny UI: save best score (leader is simplistic) */
+function showMessage(m){
+  alert(m);
+}
+
+/* ---------- small polish: keyboard shortcuts ---------- */
+window.addEventListener('keydown', (e)=>{
+  if(e.key === '1') quickPlace('goblin', 1);
+  if(e.key === '2') quickPlace('knight', 1);
+  if(e.key === '3') quickPlace('archer', 1);
+  if(e.key === '4') quickPlace('giant', 1);
+  if(e.key === '5') quickPlace('wizard', 1);
+  if(e.key === '6') quickPlace('dragon', 1);
+});
+
+/* ---------- cleanup / defensive ---------- */
+/* Ensure canvas resizes visually on orientation change */
+window.addEventListener('resize', ()=>{ canvas.style.width = '100%'; });
+
+</script>
+</body>
+</html>
